@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Verificador QR - Fraccionamiento</title>
+<style>
+body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+.container { max-width: 500px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);}
+textarea { width: 100%; height: 100px; margin-bottom: 10px; }
+button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+#result { margin-top: 20px; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="container">
+<h2>Verificador QR - Fraccionamiento</h2>
+<p>Pega el contenido del QR y haz clic en "Verificar".</p>
+<textarea id="qrtext"></textarea>
+<br>
+<button onclick="verify()">Verificar</button>
+<div id="result"></div>
+</div>
+
+<script>
+const SECRET = "cambia-esta-clave-super-secreta";
+
+function b64ToBytes(s) {
+    s = s.padEnd(s.length + (4 - s.length % 4) % 4, '=');
+    return Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
+}
+
+function utf8ToBytes(str) {
+    return new TextEncoder().encode(str);
+}
+
+async function verify() {
+    const resultEl = document.getElementById('result');
+    try {
+        const qrText = document.getElementById('qrtext').value.trim();
+        const obj = JSON.parse(qrText);
+        const sig = obj.sig;
+        delete obj.sig;
+        const body = JSON.stringify(obj, Object.keys(obj).sort());
+
+        // Crear HMAC SHA256
+        const key = await crypto.subtle.importKey("raw", utf8ToBytes(SECRET), {name:"HMAC", hash:"SHA-256"}, false, ["sign"]);
+        const signature = await crypto.subtle.sign("HMAC", key, utf8ToBytes(body));
+        const sigCalc = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+
+        const exp = new Date(obj.exp);
+        const now = new Date();
+
+        if(sig !== sigCalc) { resultEl.innerText = "Firma inválida"; return; }
+        if(now > exp) { resultEl.innerText = "QR vencido"; return; }
+
+        resultEl.innerText = `Válido: ${obj.rid} hasta ${obj.exp}`;
+    } catch(e) {
+        resultEl.innerText = "Error: " + e;
+    }
+}
+</script>
+</body>
+</html>
