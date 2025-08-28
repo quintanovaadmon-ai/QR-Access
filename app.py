@@ -63,3 +63,7 @@ def check_qr():
         return jsonify({"valid": True, "message": f"✅ Acceso permitido: {house}"})
     except:
         return jsonify({"valid": False, "message": "❌ Formato inválido"})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
+
