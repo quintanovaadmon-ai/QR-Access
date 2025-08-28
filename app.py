@@ -21,17 +21,15 @@ def generate_qr(house):
     if not house_info:
         return "❌ Casa no registrada", 404
 
-    # Data del QR: Casa|Secreto
+    # QR: casa|clave secreta
     data = f"{house}|{house_info['secret']}"
-
     img = qrcode.make(data)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
-
     return send_file(buf, mimetype="image/png")
 
-# 🟢 Página de verificación con cámara del celular
+# 🟢 Página de verificación con cámara trasera
 @app.route("/verify")
 def verify_page():
     html = """
@@ -61,12 +59,26 @@ def verify_page():
         }
 
         function onScanError(errorMessage) {
-            // ignorar errores para no saturar
+            // ignorar errores
         }
 
-        let html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader", { fps: 10, qrbox: 250 });
-        html5QrcodeScanner.render(onScanSuccess, onScanError);
+        // Forzar cámara trasera
+        let html5QrCode = new Html5Qrcode("reader");
+        Html5Qrcode.getCameras().then(devices => {
+            if (devices && devices.length) {
+                let backCamera = devices.find(device => device.label.toLowerCase().includes("back"))
+                                || devices.find(device => device.label.toLowerCase().includes("environment"))
+                                || devices[devices.length - 1]; // fallback
+                html5QrCode.start(
+                    backCamera.id,
+                    { fps: 10, qrbox: 250 },
+                    onScanSuccess,
+                    onScanError
+                );
+            }
+        }).catch(err => {
+            console.error("No se pudo acceder a la cámara", err);
+        });
         </script>
     </body>
     </html>
@@ -80,16 +92,13 @@ def check_qr():
     try:
         house, secret = qrdata.split("|")
 
-        # Validar casa
         house_info = AUTHORIZED_HOUSES.get(house)
         if not house_info:
             return jsonify({"valid": False, "message": "❌ Casa no registrada"})
 
-        # Validar secreto
         if secret != house_info["secret"]:
             return jsonify({"valid": False, "message": "❌ Código inválido"})
 
-        # Validar estatus
         if house_info["status"] == "moroso":
             return jsonify({"valid": False, "message": f"⛔ Acceso denegado: {house} (moroso)"})
         elif house_info["status"] == "activo":
