@@ -1,12 +1,13 @@
-house,status
-C-001,activo
-C-002,activo
-C-003,activo
-C-004,activo
-C-062,activo
-C-173,moroso
-C-179,moroso
-C-181,activo
-C-195,activo
-C-203,activo
+house,status,secret
+C-001,activo,abc123
+C-002,activo,def456
+C-003,moroso,ghi789
+C-004,activo,jkl321
+C-005,moroso,mno654
+C-053,activo,jkl320
+C-062,activo,jkl320
+C-173,moroso,mno654
+C-179,moroso,mno654
+C-181,activo,jkl321
+C-195,moroso,mno654
 
