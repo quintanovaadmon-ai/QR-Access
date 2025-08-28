@@ -4,10 +4,10 @@ import datetime, io, os
 
 app = Flask(__name__)
 
-# 🔒 Clave secreta (guárdala como variable de entorno en Render)
+# 🔒 Clave secreta (cámbiala en Render con Environment Variable)
 SECRET = os.getenv("QR_SECRET", "mi_clave_super_segura")
 
-# 🟢 Ruta para generar QR de una casa
+# 🟢 Generar QR de una casa
 @app.route("/generate/<house>")
 def generate_qr(house):
     today = datetime.date.today().strftime("%Y-%m-%d")
@@ -21,35 +21,43 @@ def generate_qr(house):
 
     return send_file(buf, mimetype="image/png")
 
-# 🟢 Página web para verificar QR (los guardias la abren en el cel/tablet)
+# 🟢 Página de verificación con cámara
 @app.route("/verify")
 def verify_page():
     html = """
     <html>
-    <head><title>Verificador QR</title></head>
+    <head>
+        <title>Verificador QR</title>
+        <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    </head>
     <body style="font-family:Arial; text-align:center;">
         <h2>📷 Verificador de QR</h2>
-        <p>Pega aquí el contenido leído del QR:</p>
-        <input type="text" id="qrdata" style="width:80%; padding:8px;" />
-        <button onclick="verify()">Verificar</button>
-        <p id="result"></p>
+        <div id="reader" style="width:300px; margin:auto;"></div>
+        <p id="result" style="font-size:18px; font-weight:bold;"></p>
 
         <script>
-        function verify() {
-            let qrdata = document.getElementById("qrdata").value;
-            fetch('/check?data=' + encodeURIComponent(qrdata))
+        function onScanSuccess(decodedText, decodedResult) {
+            fetch('/check?data=' + encodeURIComponent(decodedText))
             .then(r => r.json())
             .then(d => {
                 document.getElementById("result").innerText = d.message;
             });
         }
+
+        function onScanError(errorMessage) {
+            // errores se ignoran para no spamear
+        }
+
+        let html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", { fps: 10, qrbox: 250 });
+        html5QrcodeScanner.render(onScanSuccess, onScanError);
         </script>
     </body>
     </html>
     """
     return render_template_string(html)
 
-# 🟢 Ruta de verificación (procesa lo leído del QR)
+# 🟢 Ruta de verificación (procesa el QR)
 @app.route("/check")
 def check_qr():
     qrdata = request.args.get("data", "")
@@ -64,6 +72,6 @@ def check_qr():
     except:
         return jsonify({"valid": False, "message": "❌ Formato inválido"})
 
+# 🟢 Modo local (por si corres con python app.py)
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-
