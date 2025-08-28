@@ -1,24 +1,28 @@
 from flask import Flask, request, jsonify, send_file, render_template_string
 import qrcode
-import datetime, io, os, csv
+import io, os, csv
 
 app = Flask(__name__)
-
-# 🔒 Clave secreta (debe configurarse en Render como variable de entorno)
-SECRET = os.getenv("QR_SECRET", "mi_clave_super_segura")
 
 # 📂 Cargar casas desde residents.csv
 AUTHORIZED_HOUSES = {}
 with open("residents.csv", newline="", encoding="utf-8") as f:
     reader = csv.DictReader(f)
     for row in reader:
-        AUTHORIZED_HOUSES[row["house"]] = row["status"]
+        AUTHORIZED_HOUSES[row["house"]] = {
+            "status": row["status"],
+            "secret": row["secret"]
+        }
 
 # 🟢 Generar QR para una casa
 @app.route("/generate/<house>")
 def generate_qr(house):
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    data = f"{house}|{today}|{SECRET}"
+    house_info = AUTHORIZED_HOUSES.get(house)
+    if not house_info:
+        return "❌ Casa no registrada", 404
+
+    # Data del QR: Casa|Secreto
+    data = f"{house}|{house_info['secret']}"
 
     img = qrcode.make(data)
     buf = io.BytesIO()
@@ -74,25 +78,24 @@ def verify_page():
 def check_qr():
     qrdata = request.args.get("data", "")
     try:
-        house, date, secret = qrdata.split("|")
-        today = datetime.date.today().strftime("%Y-%m-%d")
-
-        # Validar secreto
-        if secret != SECRET:
-            return jsonify({"valid": False, "message": "❌ Código inválido"})
-
-        # Validar fecha
-        if date != today:
-            return jsonify({"valid": False, "message": "⚠️ QR vencido"})
+        house, secret = qrdata.split("|")
 
         # Validar casa
-        status = AUTHORIZED_HOUSES.get(house, "desconocido")
-        if status == "moroso":
+        house_info = AUTHORIZED_HOUSES.get(house)
+        if not house_info:
+            return jsonify({"valid": False, "message": "❌ Casa no registrada"})
+
+        # Validar secreto
+        if secret != house_info["secret"]:
+            return jsonify({"valid": False, "message": "❌ Código inválido"})
+
+        # Validar estatus
+        if house_info["status"] == "moroso":
             return jsonify({"valid": False, "message": f"⛔ Acceso denegado: {house} (moroso)"})
-        elif status == "activo":
+        elif house_info["status"] == "activo":
             return jsonify({"valid": True, "message": f"✅ Acceso permitido: {house}"})
         else:
-            return jsonify({"valid": False, "message": f"❌ Casa no registrada: {house}"})
+            return jsonify({"valid": False, "message": f"❌ Estado desconocido: {house}"})
 
     except Exception:
         return jsonify({"valid": False, "message": "❌ Formato inválido"})
